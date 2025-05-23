@@ -9,7 +9,7 @@
 #'  
 #' **Purpose**: This script downloads movement data associated with nesting hens for NSD calculation
 #' **Last Updated**: 5/21/25
-#' 
+
 
 ################################################################################
 ## Load Packages
@@ -37,10 +37,10 @@ lapply(packages, load_packages)
 ################################################################################
 ## Load in Data
 
-dat.5c <- readRDS("Data Management/RData/Pennsylvania/GPS Data/5C/GPS.5c.RDS")
+dat.5c <- readRDS("Data Management/RData/Pennsylvania/GPS Data/2D/GPS.2D.RDS")
 
 #' Create an sf object from lon/lat
-df_sf <- df %>%
+df_sf <- dat.5c %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)  # WGS84
 
 #' Transform to UTM (EPSG:32618 is UTM Zone 18N)
@@ -60,7 +60,8 @@ df_displacement <- df_coords %>%
   group_by(individual_local_identifier) %>%
   mutate(
     displacement = sqrt((utm_x - lag(utm_x))^2 + (utm_y - lag(utm_y))^2),
-    date = as_date(timestamp)
+    date = as_date(timestamp),
+    timestamp = first(timestamp)
   ) %>%
   ungroup()
 
@@ -76,12 +77,12 @@ df_nsd_meters <- df_displacement %>%
   ) %>%
   ungroup()
 
-# Merge NSD and displacement into one summary per day
 mean_nsd_per_day_m <- df_displacement %>%
   group_by(individual_local_identifier, date) %>%
   summarise(
     mean_nsd_m = mean((utm_x - first(utm_x))^2 + (utm_y - first(utm_y))^2, na.rm = TRUE),
-    mean_disp_m = mean(displacement, na.rm = TRUE)
+    mean_disp_m = mean(displacement, na.rm = TRUE),
+    timestamp = first(timestamp)
   ) %>%
   ungroup() %>%
   mutate(
@@ -90,16 +91,17 @@ mean_nsd_per_day_m <- df_displacement %>%
       str_sub(individual_local_identifier, 1, 4),
       str_sub(individual_local_identifier, 6, 9),
       sep = "_"
-    )
+    ),
+    NestID = str_replace(individual_local_identifier, "^(([^_]*_){2}[^_]*).*", "\\1")  # Keep up to the second underscore's following part
   ) %>%
   filter(month(date) >= 3 & month(date) <= 5)  # Filter March–May
 
 #' Get all unique IDs
-ids <- unique(mean_nsd_per_day_m$individual_local_identifier)
+ids <- unique(mean_nsd_per_day_m$NestID)
 
 for (id in ids) {
   plot_data <- mean_nsd_per_day_m %>%
-    filter(individual_local_identifier == id)
+    filter(NestID == id)
   
   p <- ggplot(plot_data, aes(x = days_numeric, y = mean_nsd_m)) +
     geom_line(color = "forestgreen", size = 1) +
@@ -119,3 +121,15 @@ for (id in ids) {
   Sys.sleep(1)
 }
 
+#' Subset columns 
+mean_nsd_per_day_m <- mean_nsd_per_day_m %>%
+  dplyr::select(NestID, BirdID, timestamp, mean_nsd_m, mean_disp_m, days_numeric)
+
+#' Rename columns 
+dat.test <- mean_nsd_per_day_m %>%
+  dplyr::filter(NestID == "8184_2023_1") %>%
+  dplyr::rename("t_" = timestamp) %>%
+  dplyr::rename("nsd_daily_mean" = mean_nsd_m) %>%
+  dplyr::rename("displacement" = mean_disp_m)
+
+write_csv(dat.test, "nsdtest.csv")

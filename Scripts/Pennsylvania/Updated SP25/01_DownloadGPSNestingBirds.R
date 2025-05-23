@@ -60,13 +60,23 @@ pa.nests.4D <- dplyr::filter(pa.nests, WMU =="4D")%>%
   dplyr::filter(NestID != "8262_2022_1") %>%
   dplyr::filter(NestNumber == "1")
 
-#' Merge pa.nests.4D and nests.inc, only keep nests that exist in both pa.nests.4D and nests.inc
-pa.nests.4D1 <- dplyr::inner_join(pa.nests.4D, nests.inc, by = "NestID") %>%
-  dplyr::select(-CheckDate.y) %>%
-  dplyr::rename("CheckDate" = CheckDate.x) %>%
-  dplyr::mutate("Start" = CaptureDate) %>%
-  dplyr::mutate("End" = endI)
+pa.nests.4D1 <- inner_join(pa.nests.4D, nests.inc, by = "NestID") %>%
+  select(-CheckDate.y) %>%
+  rename(CheckDate = CheckDate.x) %>%
+  mutate(
+    CapYear = year(CaptureDate),
+    CheckYear = year(CheckDate),
+    CapMonth = month(CaptureDate),
+    Start = case_when(
+      CapMonth == 12 ~ CaptureDate + days(5),
+      CapYear != CheckYear ~ CaptureDate + days(365),
+      TRUE ~ CaptureDate
+    ),
+    End = endI
+  )
+
 glimpse(pa.nests.4D1)
+
 
 #' Subset nesting data for 3D in year 2022
 pa.nests.3D <- dplyr::filter(pa.nests, WMU =="3D")%>%
@@ -75,10 +85,20 @@ pa.nests.3D <- dplyr::filter(pa.nests, WMU =="3D")%>%
 
 #' Merge pa.nests.3D and nests.inc, only keep nests that exist in both pa.nests.3D and nests.inc
 pa.nests.3D1 <- dplyr::inner_join(pa.nests.3D, nests.inc, by = "NestID") %>%
-  dplyr::select(-CheckDate.y) %>%
-  dplyr::rename("CheckDate" = CheckDate.x) %>%
-  dplyr::mutate("Start" = CaptureDate) %>%
-  dplyr::mutate("End" = endI)
+  select(-CheckDate.y) %>%
+  rename(CheckDate = CheckDate.x) %>%
+  mutate(
+    CapYear = year(CaptureDate),
+    CheckYear = year(CheckDate),
+    CapMonth = month(CaptureDate),
+    Start = case_when(
+      CapMonth == 12 ~ CaptureDate + days(5),
+      CapYear != CheckYear ~ CaptureDate + days(365),
+      TRUE ~ CaptureDate
+    ),
+    End = endI
+  )
+
 glimpse(pa.nests.3D1)
 
 #' Subset nesting data for 2D 
@@ -86,13 +106,21 @@ pa.nests.2D <- dplyr::filter(pa.nests, WMU =="2D")%>%
   dplyr::select(BandID, CheckDate, NestID, WMU, Lat, Long, NestNumber, CaptureDate) %>%
   dplyr::filter(NestNumber == "1")
 
-#' Merge pa.nests.2D and nests.inc, only keep nests that exist in both pa.nests.2D and nests.inc
-pa.nests.2D1 <- dplyr::inner_join(pa.nests.2D, nests.inc, by = "NestID") %>%
-  dplyr::select(-CheckDate.y) %>%
-  dplyr::rename("CheckDate" = CheckDate.x) %>%
-  dplyr::mutate("Start" = CaptureDate) %>%
-  dplyr::mutate("End" = endI)
-glimpse(pa.nests.2D1)
+pa.nests.2D1 <- inner_join(pa.nests.2D, nests.inc, by = "NestID") %>%
+  select(-CheckDate.y) %>%
+  rename(CheckDate = CheckDate.x) %>%
+  mutate(
+    CapYear = year(CaptureDate),
+    CheckYear = year(CheckDate),
+    CapMonth = month(CaptureDate),
+    Start = case_when(
+      CapMonth == 12 ~ CaptureDate + days(5),
+      CapYear != CheckYear ~ CaptureDate + days(365),
+      TRUE ~ CaptureDate
+    ),
+    End = endI
+  )
+
 
 #' Subset nesting data for 5C 
 pa.nests.5C <- dplyr::filter(pa.nests, WMU =="5C")%>%
@@ -101,10 +129,19 @@ pa.nests.5C <- dplyr::filter(pa.nests, WMU =="5C")%>%
 
 #' Merge pa.nests.5C and nests.inc, only keep nests that exist in both pa.nests.5C and nests.inc
 pa.nests.5C1 <- dplyr::inner_join(pa.nests.5C, nests.inc, by = "NestID") %>%
-  dplyr::select(-CheckDate.y) %>%
-  dplyr::rename("CheckDate" = CheckDate.x) %>%
-  dplyr::mutate("Start" = CaptureDate) %>%
-  dplyr::mutate("End" = endI) %>%
+  select(-CheckDate.y) %>%
+  rename(CheckDate = CheckDate.x) %>%
+  mutate(
+    CapYear = year(CaptureDate),
+    CheckYear = year(CheckDate),
+    CapMonth = month(CaptureDate),
+    Start = case_when(
+      CapMonth == 12 ~ CaptureDate + days(5),
+      CapYear != CheckYear ~ CaptureDate + days(365),
+      TRUE ~ CaptureDate
+    ),
+    End = endI
+  )%>%
   dplyr::filter(NestID != "9072_2023_1") %>%
   dplyr::filter(NestID != "9093_2023_1")
 glimpse(pa.nests.5C1)
@@ -144,6 +181,7 @@ for (j in 1:length(unique.ID.4d)){
                                      individual_local_identifier= BirdID,
                                      timestamp_start= StartDate,
                                      timestamp_end= EndDate,
+                                     Year = Year,
                                      removeDuplicatedTimestamps=T)
     mt_track_id(dat.4d)<-rep(tmp.subset.4d$TrackID[i],nrow(dat.4d))
     
@@ -158,6 +196,7 @@ for (j in 1:length(unique.ID.4d)){
 }
 
 saveRDS(full_all_4d, "Data Management/RData/Pennsylvania/GPS Data/4D/GPS.4D.RDS")
+
 
 ################################################################################
 ## WMU 3D - Winter Home Range
@@ -297,3 +336,6 @@ save(df.all,
      full_all_4d,
      full_all_5c, 
      file = "Data Management/RData/Pennsylvania/GPS Data/NestingHens.RData")
+
+
+
