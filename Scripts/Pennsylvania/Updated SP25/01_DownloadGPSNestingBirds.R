@@ -1,14 +1,11 @@
 #'---
 #' title: Seasonal Movements of Wild Turkeys in the Mid-Atlantic Region
-#' author: "K. Smelter, F. Buderman"
+#' author: "K. Smelter
 #' date: "`r format(Sys.time(), '%d %B, %Y')`"
-#' output: df.Winter.Rdata
-#'   html_document: 
-#'     toc: true
 #'---
 #'  
 #' **Purpose**: This script downloads movement data associated with nesting hens for NSD calculation
-#' **Last Updated**: 5/21/25
+#' **Last Updated**: 5/23/25
 
 
 ################################################################################
@@ -38,20 +35,25 @@ lapply(packages, load_packages)
 ###############################################################################
 ## Data Management
 
-#' Csv from incubation start and end script
+#' Read in Pennsylvania nests csv
 pa.nests <- read_csv("Data Management/Csvs/Pennsylvania/Processed/Nests/Nests/Pennsylvania/2025_CleanedNests_2022_2023_PA.csv") 
 pa.nests
 
+#' Read in incubation csv
 nests.inc <- read_csv("Data Management/Csvs/Pennsylvania/Processed/Incubation Dates/Pennsylvania/20250131_NestAttempts_allbirds_PA.csv")
 nests.inc
 
+#' Read in captures csv
 captures <- read_csv("Data Management/Csvs/Pennsylvania/Processed/Captures/captures.csv")
 captures
 
+#' Filter captures to only include hens
+#' Create a capture column
 captures <- captures %>% rename(BandID = bandid) %>%
   dplyr::filter(sex == "F")  %>%
   mutate(CaptureDate = as.Date(paste(captyr, captmo, captday, sep = "-")))
 
+#' Merge captures and PA nesting datasets
 pa.nests <- right_join(captures, pa.nests)
 
 #' Subset nesting data for 4D 
@@ -60,6 +62,7 @@ pa.nests.4D <- dplyr::filter(pa.nests, WMU =="4D")%>%
   dplyr::filter(NestID != "8262_2022_1") %>%
   dplyr::filter(NestNumber == "1")
 
+#' Stratify dataset by incubation data
 pa.nests.4D1 <- inner_join(pa.nests.4D, nests.inc, by = "NestID") %>%
   select(-CheckDate.y) %>%
   rename(CheckDate = CheckDate.x) %>%
@@ -106,6 +109,7 @@ pa.nests.2D <- dplyr::filter(pa.nests, WMU =="2D")%>%
   dplyr::select(BandID, CheckDate, NestID, WMU, Lat, Long, NestNumber, CaptureDate) %>%
   dplyr::filter(NestNumber == "1")
 
+#' Stratify dataset by incubation data
 pa.nests.2D1 <- inner_join(pa.nests.2D, nests.inc, by = "NestID") %>%
   select(-CheckDate.y) %>%
   rename(CheckDate = CheckDate.x) %>%
@@ -323,19 +327,22 @@ full_all_4d <- as.data.frame(full_all_4d)
 full_all_2d <- as.data.frame(full_all_2d)
 full_all_5c <- as.data.frame(full_all_5c)
 
-#' Create df with all study areas
+#' Create object with all  gps data for modelling 
 df.all <- rbind(full_all_5c, 
-                    full_all_3d, 
-                    full_all_2d, 
-                    full_all_4d) %>%
-  dplyr::rename("BirdID"= individual_local_identifier) 
+                full_all_3d, 
+                full_all_2d, 
+                full_all_4d) %>%
+  dplyr::mutate(individual_local_identifier = str_remove(individual_local_identifier, "_1$")) %>%
+  dplyr::rename(NestID = individual_local_identifier) %>%
+  dplyr::mutate(BirdID = str_extract(NestID, "^\\d{4}"))
 
+#' Outout data
 save(df.all, 
      full_all_2d,
      full_all_3d, 
      full_all_4d,
      full_all_5c, 
-     file = "Data Management/RData/Pennsylvania/GPS Data/NestingHens.RData")
+     file = "Data Management/RData/Pennsylvania/GPS Data/NestingHensGPS.RData", overwrite = T)
 
-
-
+################################################################################
+###############################################################################X

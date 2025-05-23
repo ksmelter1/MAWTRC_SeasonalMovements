@@ -1,6 +1,6 @@
 #'---
 #' title: Seasonal Movements of Wild Turkeys in the Mid-Atlantic Region
-#' author: "K. Smelter, F. Buderman"
+#' author: "K. Smelter
 #' date: "`r format(Sys.time(), '%d %B, %Y')`"
 #' output: df.Winter.Rdata
 #'   html_document: 
@@ -34,20 +34,24 @@ load_packages <- function(package_name) {
 #' Apply the function to each package name
 lapply(packages, load_packages)
 
+
 ################################################################################
 ## Load in Data
 
-dat.5c <- readRDS("Data Management/RData/Pennsylvania/GPS Data/2D/GPS.2D.RDS")
+
+load("Data Management/RData/Pennsylvania/GPS Data/NestingHensGPS.RData")
 
 #' Create an sf object from lon/lat
-df_sf <- dat.5c %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)  # WGS84
-
-#' Transform to UTM (EPSG:32618 is UTM Zone 18N)
-df_sf_utm <- st_transform(df_sf, crs = 32618)
+#' Convert to utm coordinate system
+df_sf <-df.all%>%
+  mutate(long = unlist(map(df.all$geometry,1)),
+         lat = unlist(map(df.all$geometry,2))) %>%
+  dplyr::select(BirdID, NestID, timestamp,long, lat) %>%
+  st_as_sf(coords = c("long", "lat"), crs = 4326) %>%
+  st_transform(32618)
 
 #' Extract UTM coordinates
-df_coords <- df_sf_utm %>%
+df_coords <- df_sf %>%
   mutate(
     utm_x = st_coordinates(.)[, 1],
     utm_y = st_coordinates(.)[, 2]
@@ -56,8 +60,8 @@ df_coords <- df_sf_utm %>%
 
 # Calculate daily displacement in meters
 df_displacement <- df_coords %>%
-  arrange(individual_local_identifier, timestamp) %>%
-  group_by(individual_local_identifier) %>%
+  arrange(NestID, timestamp) %>%
+  group_by(NestID) %>%
   mutate(
     displacement = sqrt((utm_x - lag(utm_x))^2 + (utm_y - lag(utm_y))^2),
     date = as_date(timestamp),
@@ -67,8 +71,8 @@ df_displacement <- df_coords %>%
 
 #' Recalculate NSD in meters²
 df_nsd_meters <- df_displacement %>%
-  arrange(individual_local_identifier, timestamp) %>%
-  group_by(individual_local_identifier) %>%
+  arrange(NestID, timestamp) %>%
+  group_by(NestID) %>%
   mutate(
     x0 = first(utm_x),
     y0 = first(utm_y),
@@ -77,8 +81,11 @@ df_nsd_meters <- df_displacement %>%
   ) %>%
   ungroup()
 
+#' Calculate mean net squared displacement for each individual
+#' Create a days_numeric column
+#' Constrain data to March-May
 mean_nsd_per_day_m <- df_displacement %>%
-  group_by(individual_local_identifier, date) %>%
+  group_by(NestID, date) %>%
   summarise(
     mean_nsd_m = mean((utm_x - first(utm_x))^2 + (utm_y - first(utm_y))^2, na.rm = TRUE),
     mean_disp_m = mean(displacement, na.rm = TRUE),
@@ -88,13 +95,12 @@ mean_nsd_per_day_m <- df_displacement %>%
   mutate(
     days_numeric = yday(date),
     BirdID = paste(
-      str_sub(individual_local_identifier, 1, 4),
-      str_sub(individual_local_identifier, 6, 9),
-      sep = "_"
-    ),
-    NestID = str_replace(individual_local_identifier, "^(([^_]*_){2}[^_]*).*", "\\1")  # Keep up to the second underscore's following part
+      str_sub(NestID, 1, 4),
+      str_sub(NestID, 6, 9),
+      sep = "_")
   ) %>%
-  filter(month(date) >= 3 & month(date) <= 5)  # Filter March–May
+  filter(month(date) >= 3 & month(date) <= 5)
+
 
 #' Get all unique IDs
 ids <- unique(mean_nsd_per_day_m$NestID)
@@ -123,13 +129,34 @@ for (id in ids) {
 
 #' Subset columns 
 mean_nsd_per_day_m <- mean_nsd_per_day_m %>%
-  dplyr::select(NestID, BirdID, timestamp, mean_nsd_m, mean_disp_m, days_numeric)
+  dplyr::select(all_of(c("NestID", "BirdID", "timestamp", "mean_nsd_m", "mean_disp_m", "days_numeric")))
+
 
 #' Rename columns 
-dat.test <- mean_nsd_per_day_m %>%
-  dplyr::filter(NestID == "8184_2023_1") %>%
+dat <- mean_nsd_per_day_m %>%
   dplyr::rename("t_" = timestamp) %>%
   dplyr::rename("nsd_daily_mean" = mean_nsd_m) %>%
   dplyr::rename("displacement" = mean_disp_m)
 
-write_csv(dat.test, "nsdtest.csv")
+
+#' Write a csv for each unique NestID
+#' Filter data by unique NestID
+#' Store in directory titled Nest Data
+#' Create a directory to store CSV files if it doesn't exist
+output_dir <- "Data Management/Csvs/Hen_NSD_Data/"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+#' Loop through each unique NestID and write a CSV
+unique_nests <- unique(dat$NestID)
+
+for (nest in unique_nests) {
+  nest_data <- dat %>% filter(NestID == nest)
+  filename <- paste0(output_dir, "/", nest, ".csv")
+  write.csv(nest_data, filename, row.names = FALSE)
+  print(paste("CSV for NestID", nest, "is written"))
+}
+
+################################################################################
+###############################################################################X
