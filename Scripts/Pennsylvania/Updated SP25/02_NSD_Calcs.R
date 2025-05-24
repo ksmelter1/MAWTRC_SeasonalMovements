@@ -99,7 +99,7 @@ mean_nsd_per_day_m <- df_displacement %>%
       str_sub(NestID, 6, 9),
       sep = "_")
   ) %>%
-  filter(month(date) >= 3 & month(date) <= 5)
+  filter(month(date) >= 2 & month(date) <= 5)
 
 
 #' Get all unique IDs
