@@ -56,7 +56,7 @@ df_sf <- df.all %>%
 #' Drop geometry at the end because it is unnecessary
 #' Create BirdID column that exists for each hen for each year
 df_coords <- df_sf %>%
-  mutate(
+  dplyr::mutate(
     utm_E = st_coordinates(.)[, 1],
     utm_N = st_coordinates(.)[, 2],
     long = st_coordinates(st_transform(., 4326))[, 1],
