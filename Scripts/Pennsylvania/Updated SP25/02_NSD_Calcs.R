@@ -39,8 +39,18 @@ lapply(packages, load_packages)
 ################################################################################
 ## Load in Data
 
-
+#' Data with all nesting hens
 load("Data Management/RData/Pennsylvania/GPS Data/NestingHensGPS.RData")
+
+#' Data with all non-nesting hens
+load("Data Management/RData/Pennsylvania/GPS Data/NonNestingHensGPS.RData")
+
+#' Bind non-nesting and nesting hen data together
+df.all <- bind_rows(df.nesting, df.nonnesting)
+
+
+################################################################################
+## NSD Calculations using Net Squared Displacement
 
 #' Create the sf object from lon/lat and convert to UTM (zone 18N, EPSG:32618)
 df_sf <- df.all %>%
@@ -62,12 +72,9 @@ df_coords <- df_sf %>%
     long = st_coordinates(st_transform(., 4326))[, 1],
     lat = st_coordinates(st_transform(., 4326))[, 2]
   ) %>%
-  st_drop_geometry() %>%
-  dplyr::mutate(BirdID = paste(
-    str_sub(NestID, 1, 4),
-    str_sub(NestID, 6, 9),
-    sep = "_"))
-  
+  st_drop_geometry() 
+
+
 #' Create a track using amt
 trk <- mk_track(df_coords, .x = utm_E, .y = utm_N, .t = timestamp, id = BirdID, all_cols = T)
 
@@ -87,7 +94,7 @@ df_nsd <- data.frame(BirdID = trk2[[1]],
                      )
 
 #' Output dataset
-write_csv(df_nsd, here("Data Management/Csvs/Hen_NSD_Data/full_w_nsd.csv"))
+write_csv(df_nsd, here("Data Management/Csvs/Hen_NSD_Data/full_nsd.csv"))
 
 ################################################################################
 ###############################################################################X

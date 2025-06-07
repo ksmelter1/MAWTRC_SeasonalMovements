@@ -27,11 +27,12 @@ require(moveVis)
 
 #' Filter to a specific bird
 #' Filter timestamps to a particular period
-dat.move.disp <- df_sub_sf %>%
-  dplyr::filter(BirdID == "8805_2023") %>%
+dat.move.disp <- df_coords %>%
+  dplyr::filter(BirdID == "9061_2023") %>%
   ungroup() %>%
   dplyr::filter(timestamp >= as.POSIXct("2023-03-14") & 
-           timestamp <= as.POSIXct("2023-04-01"))
+           timestamp <= as.POSIXct("2023-04-01")) %>%
+  st_as_sf(coords = c("long","lat"), crs = 4326) 
 
 #' Extract coordinates
 coords <- st_coordinates(dat.move.disp)
@@ -55,7 +56,7 @@ dat <- df2move(df = dat.move.disp,
           track_id = "BirdID")  
 
 #' Align move_data to a uniform time scale
-m<- align_move(dat, res = 3, unit = "hours") 
+m<- align_move(dat, res = 1, unit = "hours") 
 
 #' Create frames
 frames <- frames_spatial(m,

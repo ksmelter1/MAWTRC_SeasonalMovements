@@ -32,7 +32,7 @@ load_packages <- function(package_name) {
 lapply(packages, load_packages)
 
 
-###############################################################################
+################################################################################
 ## Data Management
 
 #' Read in Pennsylvania nests csv
@@ -151,7 +151,7 @@ pa.nests.5C1 <- dplyr::inner_join(pa.nests.5C, nests.inc, by = "NestID") %>%
 glimpse(pa.nests.5C1)
 
 
-#############################################################################
+################################################################################
 ## Login to Movebank
 
 
@@ -160,9 +160,15 @@ login <- movebank_store_credentials(username = "Kyle.Smelter",
                                     key="Kyle",
                                     force= T)
 
+# Downloads movebank data separately for hens that nest versus hens that didn't nest
+# Will combine datasets in a later script
+# For hens that nested download from the capture date through the end of incubation for nest attempt 1
+# For hens that didn't nest, download from capture date through the end of May
+# I later constrict GPS data between February and the end of May in both datasets
+
 
 #############################################################################
-## WMU 4D - Winter Home Range
+## WMU 4D - GPS Data
 
 
 unique.ID.4d<-unique(pa.nests.4D1$NestID)
@@ -202,8 +208,16 @@ for (j in 1:length(unique.ID.4d)){
 saveRDS(full_all_4d, "Data Management/RData/Pennsylvania/GPS Data/4D/GPS.4D.RDS")
 
 
+
+dat.4d.non <- movebank_download_study(study ="Wild Turkey Pennsylvania WMU 4D", 
+                                      login = login,
+                                      removeDuplicatedTimestamps=T)
+
+saveRDS(dat.4d.non, "Data Management/RData/Pennsylvania/GPS Data/4D/GPS.4D.NonNest.RDS")
+
+
 ################################################################################
-## WMU 3D - Winter Home Range
+## WMU 3D - GPS Data
 
 
 unique.ID.3d<-unique(pa.nests.3D1$NestID)
@@ -241,8 +255,16 @@ for (j in 1:length(unique.ID.3d)){
 
 saveRDS(full_all_3d, "Data Management/RData/Pennsylvania/GPS Data/3D/GPS.3D.RDS")
 
+
+dat.3d.non <- movebank_download_study(study ="Wild Turkey Pennsylvania WMU 3D", 
+                                      login = login,
+                                      removeDuplicatedTimestamps=T)
+
+saveRDS(dat.3d.non, "Data Management/RData/Pennsylvania/GPS Data/3D/GPS.3D.NonNest.RDS")
+
+
 ################################################################################
-##  WMU 2D - Winter Home Range
+##  WMU 2D - GPS Data
 
 
 unique.ID.2d<-unique(pa.nests.2D1$NestID)
@@ -279,8 +301,15 @@ for (j in 1:length(unique.ID.2d)){
 
 saveRDS(full_all_2d, "Data Management/RData/Pennsylvania/GPS Data/2D/GPS.2D.RDS")
 
+
+dat.2d.non <- movebank_download_study(study ="Wild Turkey Pennsylvania WMU 2D", 
+                                      login = login,
+                                      removeDuplicatedTimestamps=T)
+
+saveRDS(dat.2d.non, "Data Management/RData/Pennsylvania/GPS Data/2D/GPS.2D.NonNest.RDS")
+
 ################################################################################
-##  WMU 5C - Winter Home Range
+##  WMU 5C - GPS Data
 
 
 unique.ID.5c<-unique(pa.nests.5C1$NestID)
@@ -318,31 +347,88 @@ for (j in 1:length(unique.ID.5c)){
 
 saveRDS(full_all_5c, "Data Management/RData/Pennsylvania/GPS Data/5c/GPS.5c.RDS")
 
+
+dat.5c.non <- movebank_download_study(study ="Wild Turkey Pennsylvania WMU 5C", 
+                                      login = login,
+                                      removeDuplicatedTimestamps=T)
+
+saveRDS(dat.5c.non, "Data Management/RData/Pennsylvania/GPS Data/5C/GPS.5C.NonNest.RDS")
+
+
 ################################################################################
 ## Organize Movement Data
 
-#' Convert move objects to dataframes
-full_all_3d <- as.data.frame(full_all_3d)
-full_all_4d <- as.data.frame(full_all_4d)
-full_all_2d <- as.data.frame(full_all_2d)
-full_all_5c <- as.data.frame(full_all_5c)
+#' Convert hens that nested to move objects to dataframes
+#' Create BirdID column, keep characters 1-9
+full_all_3d <- as.data.frame(full_all_3d) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::mutate(BirdID = str_sub(BirdID, 1, 9))  
 
-#' Create object with all  gps data for modelling 
-df.all <- rbind(full_all_5c, 
+full_all_4d <- as.data.frame(full_all_4d) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::mutate(BirdID = str_sub(BirdID, 1, 9))  
+
+full_all_2d <- as.data.frame(full_all_2d) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::mutate(BirdID = str_sub(BirdID, 1, 9))  
+
+full_all_5c <- as.data.frame(full_all_5c) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::mutate(BirdID = str_sub(BirdID, 1, 9))  
+
+#' Convert hens that didn't nest to move objects
+#' Create BirdID column 
+#' Filter data to only include birds that didn't nest between 2022 and 2023 and that the month is less than June but greater than or equal to February
+full_all_3d_non <- as.data.frame(dat.3d.non) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp))))  %>%
+  dplyr::filter(!(BirdID %in% full_all_3d$BirdID)  & lubridate::year(timestamp) != 2024 & lubridate::year(timestamp) != 2025 & lubridate::month(timestamp) <6 & lubridate::month(timestamp) >= 2)
+full_all_2d_non <- as.data.frame(dat.2d.non) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::filter(!(BirdID %in% full_all_2d$BirdID)  & lubridate::year(timestamp) != 2024 & lubridate::year(timestamp) != 2025 & lubridate::month(timestamp) <6 & lubridate::month(timestamp) >= 2)
+full_all_4d_non <- as.data.frame(dat.4d.non) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::filter(!(BirdID %in% full_all_4d$BirdID)  & lubridate::year(timestamp) != 2024 & lubridate::year(timestamp) != 2025 & lubridate::month(timestamp) <6 & lubridate::month(timestamp) >= 2)
+full_all_5c_non <- as.data.frame(dat.5c.non) %>%
+  dplyr::mutate(BirdID = paste0(individual_local_identifier, "_", year(ymd_hms(timestamp)))) %>%
+  dplyr::filter(!(BirdID %in% full_all_5c$BirdID) & lubridate::year(timestamp) != 2024 & lubridate::year(timestamp) != 2025 & lubridate::month(timestamp) <6 & lubridate::month(timestamp) >= 2)
+
+
+#' Create dataframe of hens that nested to move object
+#' Nesting Index "Yes" means the hen nested and was identified via chapter 1 start and end dates
+df.nesting <- rbind(full_all_5c, 
                 full_all_3d, 
                 full_all_2d, 
                 full_all_4d) %>%
   dplyr::mutate(individual_local_identifier = str_remove(individual_local_identifier, "_1$")) %>%
   dplyr::rename(NestID = individual_local_identifier) %>%
-  dplyr::mutate(BirdID = str_extract(NestID, "^\\d{4}"))
+  dplyr::mutate("Nesting Index" = "Yes")
 
-#' Outout data
-save(df.all, 
+
+#' Create dataframe of hens that nested to move object
+#' Nesting Index "No" means that hen may have nested but not identified by start or end dates or it didn't nest
+df.nonnesting <- rbind(full_all_5c_non, 
+                    full_all_3d_non, 
+                    full_all_2d_non, 
+                    full_all_4d_non) %>%
+  dplyr::rename("BandID"= individual_local_identifier) %>%
+  dplyr::mutate("Nesting Index" = "No")
+
+
+#' Outout gps data for birds that nested
+save(df.nesting, 
      full_all_2d,
      full_all_3d, 
      full_all_4d,
      full_all_5c, 
      file = "Data Management/RData/Pennsylvania/GPS Data/NestingHensGPS.RData", overwrite = T)
+
+#' Output gps data for birds that didn't nest
+save(df.nonnesting,
+     full_all_2d_non,
+     full_all_3d_non, 
+     full_all_4d_non,
+     full_all_5c_non, 
+     file = "Data Management/RData/Pennsylvania/GPS Data/NonNestingHensGPS.RData", overwrite = T)
 
 ################################################################################
 ###############################################################################X
