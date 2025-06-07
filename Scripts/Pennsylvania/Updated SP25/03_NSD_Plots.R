@@ -5,8 +5,8 @@
 #'   html_document: 
 #'     toc: true
 #'---
-#' **Purpose**: This script creates NSD plots in km 
-#' **Last Updated**: 5/30/25
+#' **Purpose**: This script creates NSD plots in km as well as visual GPS checks
+#' **Last Updated**: 6/7/25
 
 
 ################################################################################
@@ -70,6 +70,7 @@ nsd_sub <- df %>%
 #' Filter data to only include months between February and May
 #' Create a days_numeric column 
 #' Create a year column
+#' Convert to km following Wolfson et al. (2024)
 #' Remove all values for a BirdID if the data object contains less than 30 observations
 nsd_sub <- nsd_sub %>%
   dplyr::filter(lubridate::month(jdate) >= 2 & lubridate::month(jdate) < 5) %>%
@@ -82,7 +83,6 @@ nsd_sub <- nsd_sub %>%
   dplyr::filter(dplyr::n() >= 30) %>%
   dplyr::ungroup() 
 
-length(unique(nsd_sub$BirdID))
 
 ################################################################################
 ## Create NSD Plots
@@ -155,6 +155,8 @@ for (id in unique_ids) {
 
 dev.off()
 
+################################################################################
+## Separate Lattitude and Longitude plots for each hen-year dataset
 
 #' df used to create lattitude and longitude plots
 df_sub <- df %>%
@@ -162,7 +164,10 @@ df_sub <- df %>%
   dplyr::mutate(month = lubridate::month(timestamp))
 
 
-#' Create Latitude plots and save to PDF
+################
+## Lattitude ##
+################
+
 pdf("Latitude_Over_Time_By_BirdID.pdf", width = 8, height = 6)
 
 for (id in unique_ids) {
@@ -189,6 +194,11 @@ for (id in unique_ids) {
   print(p_lat)
 }
 dev.off()  
+
+
+################
+## Longitude ##
+################
 
 #' Create Longitude plots and save to separate PDF
 pdf("Longitude_Over_Time_By_BirdID.pdf", width = 8, height = 6)

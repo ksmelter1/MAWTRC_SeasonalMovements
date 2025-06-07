@@ -8,18 +8,19 @@
 #'  
 #' **Purpose**: This script uses piecewise regression to identify behavioral transitions
 #' **Last Updated**: 6/7/25
-#' **Key Changes**: This script follows Wolfson et al. (2025)'s workflow using piecewise regression
+#' **Key Changes**: This script follows Wolfson et al. (2024)'s workflow using piecewise regression
 
 ############
 ## Notes ##
 ############
 
 # If a bird moved greater than 3 km and didn't have an average daily displacement value less than 2.5 km on day 106 (April 15th) it dispersed
+# I flagged birds that moved less than 1.3 km and didn't include them in the analysis 
 # The 3 km is from Hayden et al. 1990 where average dispersal distance from adults was 3.2 km (They calculated it differently as it was 1990)
 # April 15th is arbitrary however, it is an apriori estimate of when the majority of seasonal movements have ceased and nesting/prenesting behavior has begun
 # 7 birds exhibited dispersal behavior after April 15th 
-# Piecewise regression models for 25 hens didn't converge as they contained an Rhat value greater than 1.1. It just means that they didn't disperse as a change point wasn't detected
-
+# Piecewise regression models for 25 hen-year datasets didn't converge as they contained an Rhat value greater than 1.1. It just means that they didn't disperse as a change point wasn't detected
+# 11 hens were removed because they were not tested for LPDV
 
 ################################################################################
 ## Load Packages
@@ -213,29 +214,43 @@ dispersed_df <- data.frame(BirdID = dispersed_ids, Status = "Y", stringsAsFactor
 no_df <- data.frame(BirdID = no_ids, Status = "N", stringsAsFactors = FALSE)
 
 # Combine all: dispersed, not dispersed, and skipped (as not dispersed)
-combined_df <- rbind(dispersed_df, no_df, skipped_df)
+sample <- rbind(dispersed_df, no_df, skipped_df)
 
 # Remove duplicates in case a BirdID is in multiple categories (keep first occurrence)
-combined_df <- combined_df[!duplicated(combined_df$BirdID), ]
+sample <- sample[!duplicated(sample$BirdID), ]
 
-# Write to CSV
-write.csv(combined_df, "Sample/PA_Sample.csv", row.names = FALSE)
+# Extract bandid and convert to numeric
+sample <- sample %>%
+  dplyr::mutate("BandID" = str_sub(BirdID, 1,4)) %>%
+  dplyr::mutate(BandID = as.numeric(BandID))
 
+# Read in virus csv
+virus <- read_csv("Data Management/Csvs/Raw/Disease/LPDV_REV/Pennsylvania/virus_raw.csv") %>%
+  dplyr::rename("BandID" = bandid)
+virus
+
+# Merge virus and sample
+# If a bird dispersed assign that bird a value of 1 in the status
+sample.virus <- right_join(virus, sample) %>%
+  dplyr::select(-REV) %>%
+  dplyr::mutate(Status = if_else(Status == "Y", 1, 0))
+  
 
 ################################################################################
-## Output a csv of the complete sample with change points for each hen
+## Output a csv of the complete sample 
 
-# 25 birds do not have any model estimates as their models didn't converge
+# 25 bird-year datasets do not have any model estimates as their models didn't converge
 # These birds didn't disperse
 
 # Read in model parameter csv
 params <- read_csv("Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Model Parameters/best_mod_params.csv")
 
-# Read in complete sample
-sample <- read_csv("Sample/Complete Sample/PA_Sample.csv")
-
 # Right_join and save new csv with change point estimates
-dat4analysis_hr <- right_join(params, sample)
+# 11 hens were not tested for LPDV so they were removed from the analysis
+# Only include observations from the first change point
+dat4analysis_hr <- right_join(params, sample.virus) %>%
+  dplyr::filter(!is.na(LPDV)) %>%
+  dplyr::select(BirdID, BandID, LPDV, everything())
 
 # Output csv with all change points
 write_csv(dat4analysis_hr, "Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Model Parameters/modeloutputs.csv")
@@ -245,7 +260,11 @@ write_csv(dat4analysis_hr, "Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Re
 ## Output a csv containing only the birds that dispersed
 
 # Filter for only birds that dispersed (Status == "Y")
-dispersed_only <- dat4analysis_hr[dat4analysis_hr$Status == "Y", ]
+dispersed_only <- dat4analysis_hr[dat4analysis_hr$Status == "1", ]
+
+# Only contain change point estimate 
+dispersed_only <- dispersed_only %>%
+  dplyr::filter(name == "cp_1")
 
 # Write csv containing all dispersed birds 
 write.csv(dispersed_only, "Sample/birdlist.csv")
