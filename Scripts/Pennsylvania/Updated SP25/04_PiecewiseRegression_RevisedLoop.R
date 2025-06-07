@@ -62,7 +62,7 @@ bird_ids <- sapply(csv_files, function(f) {
 })
 
 # Create model syntax
-# Separate models containing 1, 2, 3, and 4 intercepts
+# Fit two intercept models for each hen-year dataset
 two_int<-list(nsd_plot_data~1,
               ~1)
 
@@ -190,7 +190,7 @@ write_csv(data.frame(Skipped_BirdID = skipped_birds),
 ## Create a list of birds based on dispersal status-- complete sample
 
 # Read skipped BirdIDs
-skipped_df <- read.csv(here("Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Model Parameters/skipped_birdids.csv"),
+skipped_df <- read.csv(here("Data Management/Csvs/Piecewise Regression/Model Parameters/skipped_birdids.csv"),
                        stringsAsFactors = FALSE)
 
 # Create dataframe of skipped birds with Status = "N"
@@ -198,8 +198,8 @@ skipped_df$Status <- "N"
 colnames(skipped_df)[1] <- "BirdID"  # Ensure column name matches
 
 # Set folder paths
-dispersed_path <- "Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Piecewise Regression Plots/V2_106/Dispersed/"
-no_path <- "Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Piecewise Regression Plots/V2_106/Didn't Disperse/"
+dispersed_path <- "Data Management/Csvs/Piecewise Regression/Piecewise Regression Plots/Model Output Plots/Dispersed/"
+no_path <- "Data Management/Csvs/Piecewise Regression/Piecewise Regression Plots/Model Output Plots/Didn't Disperse/"
 
 # Get file names
 dispersed_files <- list.files(dispersed_path)
@@ -234,7 +234,7 @@ virus
 sample.virus <- right_join(virus, sample) %>%
   dplyr::select(-REV) %>%
   dplyr::mutate(Status = if_else(Status == "Y", 1, 0))
-  
+
 
 ################################################################################
 ## Output a csv of the complete sample 
@@ -243,31 +243,103 @@ sample.virus <- right_join(virus, sample) %>%
 # These birds didn't disperse
 
 # Read in model parameter csv
-params <- read_csv("Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Model Parameters/best_mod_params.csv")
+params <- read_csv("Data Management/Csvs/Piecewise Regression/Model Parameters/best_mod_params.csv")
+params
 
 # Right_join and save new csv with change point estimates
 # 11 hens were not tested for LPDV so they were removed from the analysis
 # Only include observations from the first change point
 dat4analysis_hr <- right_join(params, sample.virus) %>%
   dplyr::filter(!is.na(LPDV)) %>%
-  dplyr::select(BirdID, BandID, LPDV, everything())
+  dplyr::mutate(Yr = str_sub(BirdID,6,9)) %>%
+  dplyr::select(BirdID, BandID, Yr, LPDV, everything())
+
+
+# Read in capture data
+caps <- read_csv("Data Management/Csvs/Raw/Captures/captures.csv") %>%
+  dplyr::rename("BandID" = bandid)
+caps
+
+# Convert to numeric 
+caps$captyr <- as.numeric(caps$captyr)
+dat4analysis_hr$Yr <- as.numeric(dat4analysis_hr$Yr)
+
+# Merge caps and dat4analysis_hr together
+sample.caps <- right_join(caps, dat4analysis_hr) %>%
+  dplyr::select(BandID, 
+                BirdID,
+                age,
+                studyarea,
+                captyr,
+                Yr,
+                name,
+                mean,
+                upper,
+                lower,
+                LPDV,
+                Status)
+
+# Create a years since capture column
+sample.caps <- sample.caps %>%
+  dplyr::mutate(yrsincecap = Yr-captyr)
+
+# Assign Adult as the reference level
+sample.caps$age <- ifelse(sample.caps$age == "J", 1, 
+                           ifelse(sample.caps$age == "A", 0, NA))
+
+# Dealing with scaling age ad hoc
+# If the bird is an adult and the years since capture is >1 assign it as an adult
+# If not keep the age as juvenile 
+sample.caps$age <- ifelse(sample.caps$age == 1 & sample.caps$yrsincecap >= 1, 0, sample.caps$age)
 
 # Output csv with all change points
-write_csv(dat4analysis_hr, "Data Management/Csvs/Hen_NSD_Data_Plots/Piecewise Regression/Model Parameters/modeloutputs.csv")
+# This will be used to answer the first research question about the factors influencing dispersal
+write_csv(sample.caps, "Data Management/Csvs/Piecewise Regression/Model Parameters/dat4hr.csv")
+
+# Output sample csv as a reference for future analysis without model results
+sample.final <- sample.caps %>%
+  dplyr::select(BirdID, BandID, Yr, age, studyarea, LPDV, Status)
+write_csv(sample.final, "Sample/Complete Sample/PA_Sample.csv")
 
 
 ################################################################################
 ## Output a csv containing only the birds that dispersed
 
 # Filter for only birds that dispersed (Status == "Y")
-dispersed_only <- dat4analysis_hr[dat4analysis_hr$Status == "1", ]
+dispersed_only <- sample.caps %>%
+  dplyr::filter(Status == "1")
 
 # Only contain change point estimate 
 dispersed_only <- dispersed_only %>%
-  dplyr::filter(name == "cp_1")
+  dplyr::filter(name == "cp_1") %>%
+  dplyr::select(-yrsincecap)
+
+table(dispersed_only$age)
+table(dispersed_only$LPDV)
+
+# Convert from calendar day to ymd using as.Date
+dispersed_only <- dispersed_only %>%
+  dplyr::mutate(
+    ChangePoint = as.Date(mean - 1, origin = paste0(Yr, "-01-01")),
+    upper_date = as.Date(upper - 1, origin = paste0(Yr, "-01-01")),
+    lower_date = as.Date(lower - 1, origin = paste0(Yr, "-01-01"))
+  ) %>%
+  dplyr::select(-upper_date,
+                -lower_date,
+                -name,
+                -lower,
+                -upper, 
+                -mean, 
+                -captyr, 
+                -Status) %>%
+  dplyr::rename("Age" = age) %>%
+  dplyr::rename("Year" = Yr) %>%
+  dplyr::rename("StudyArea" = studyarea)
+
 
 # Write csv containing all dispersed birds 
-write.csv(dispersed_only, "Sample/birdlist.csv")
+# This will be used for the second research question about energy expenditure during dispersal
+write.csv(dispersed_only, "Sample/Dispersed Birds/birdlist.csv")
 
 ################################################################################
 ###############################################################################X
